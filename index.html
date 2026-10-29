@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#24457A">
+<title>Your English practice</title>
+<style>
+:root{--bg:#F4F6F9;--surface:#fff;--ink:#152033;--muted:#5A6678;--line:#DCE1E9;--accent:#24457A;--ok:#1B7A4B;--pen:#B3261E}
+@media (prefers-color-scheme:dark){:root{--bg:#0E131B;--surface:#151C27;--ink:#E7ECF4;--muted:#9AA7BA;--line:#263041;--accent:#86AAEA;--ok:#6BCB9A;--pen:#F29A92}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:20px 16px 60px}
+main{max-width:760px;margin:0 auto}
+h1{font-size:26px;margin:0 0 4px;color:var(--accent);line-height:1.2}
+h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:28px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.muted{color:var(--muted);font-size:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:12px}
+.front{font-size:19px;font-weight:600;margin:6px 0}
+.back{font-size:18px;color:var(--ok);font-weight:600;margin:10px 0 4px}
+button{font:inherit;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--surface);padding:10px 16px;border-radius:7px;margin:6px 6px 0 0;min-height:44px}
+button.ghost{background:var(--surface);color:var(--ink);border-color:var(--line)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label.hw{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+label.hw input{margin-top:4px;width:20px;height:20px;flex:none}
+.tiles{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:110px}
+.tile b{display:block;font-size:24px;color:var(--accent)}
+textarea{width:100%;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+ol,ul{padding-left:22px}
+li{margin-bottom:4px}
+.spin{display:inline-block;width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+@media print{button,#res{display:none}}
+</style>
+</head>
+<body>
+<main id="app"><p class="muted"><span class="spin" aria-hidden="true"></span>Loading your practice…</p></main>
+<script>
+(function(){
+'use strict';
+var app=document.getElementById('app');
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function say(t,sub){app.innerHTML='';app.appendChild(el('h1',null,'Your English practice'));app.appendChild(el('p',null,t));if(sub)app.appendChild(el('p','muted',sub))}
+function b64uDec(s){s=String(s).replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+function fmt(d){if(!d)return '';var p=String(d).split('-');if(p.length<3)return d;return new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'})}
+function td(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function add(n){var d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+
+var parts=location.hash.replace(/^#/,'').split('/');
+if(parts.length<3||!/^[\w-]{20,80}$/.test(parts[0])||!/^[\w-]{6,40}$/.test(parts[1])||!/^[\w-]{40,50}$/.test(parts[2])){
+  say('Open the full link your tutor sent you.','The link has three parts after the # sign. If it was cut short in your chat app, ask your tutor to send it again.');return;
+}
+var SHEET=parts[0],ROW=parts[1],KEY=parts[2];
+if(!window.crypto||!crypto.subtle){say('This browser cannot open your practice.','Update your browser, or open the link in Chrome, Safari, Edge or Firefox.');return}
+
+function load(){
+  return new Promise(function(res,rej){
+    var cb='__td'+Math.random().toString(36).slice(2),s=document.createElement('script'),done=false;
+    var t=setTimeout(function(){if(!done){done=true;rej(new Error('timeout'))}},20000);
+    window[cb]=function(r){if(done)return;done=true;clearTimeout(t);try{delete window[cb]}catch(e){}res(r)};
+    var q=encodeURIComponent("select B,C where A='"+ROW+"'");
+    s.src='https://docs.google.com/spreadsheets/d/'+SHEET+'/gviz/tq?tqx=responseHandler:'+cb+'&headers=1&tq='+q+'&_='+Date.now();
+    s.onerror=function(){if(done)return;done=true;clearTimeout(t);rej(new Error('blocked'))};
+    document.head.appendChild(s);
+  });
+}
+async function inflate(u){
+  if(!window.DecompressionStream)throw new Error('old');
+  var ds=new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(ds).arrayBuffer());
+}
+async function decrypt(s){
+  var p=String(s).split('.');if(p[0]!=='v1'||p.length!==3)throw new Error('format');
+  var all=b64uDec(p[2]);
+  var k=await crypto.subtle.importKey('raw',b64uDec(KEY),'AES-GCM',false,['decrypt']);
+  var pt=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:all.slice(0,12)},k,all.slice(12)));
+  if(p[1]==='1')pt=await inflate(pt);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+load().then(function(r){
+  if(!r||r.status==='error')throw new Error('blocked');
+  var rows=r.table&&r.table.rows||[];
+  if(!rows.length||!rows[0].c||!rows[0].c[1]||!rows[0].c[1].v)throw new Error('missing');
+  return decrypt(rows[0].c[1].v);
+}).then(render).catch(function(e){
+  var m=e&&e.message;
+  if(m==='missing')say('Your practice page has been replaced.','Your tutor made a new link for you. Ask them to send it.');
+  else if(m==='old')say('This browser is too old to open your practice.','Open the link in an up-to-date Chrome, Safari, Edge or Firefox.');
+  else if(m==='blocked'||m==='timeout')say('Your practice could not load right now.','Check your internet connection and refresh the page. If it still does not load, tell your tutor.');
+  else say('This link does not open a practice page.','Ask your tutor to send the link again.');
+});
+
+function render(D){
+  var KEYS='tdroom-'+D.sid,ST={hw:{},cards:{}};
+  try{var s=JSON.parse(localStorage.getItem(KEYS)||'null');if(s&&s.cards)ST=s}catch(e){}
+  var SES=D.ses?D.ses.id:'';if(ST.hwFor!==SES){ST.hw={};ST.hwFor=SES}
+  (D.cards||[]).forEach(function(c){var x=ST.cards[c.k];if(!x||(c.last||0)>(x.last||0))ST.cards[c.k]={box:c.box,due:c.due,right:c.right,wrong:c.wrong,last:c.last}});
+  function save(){try{localStorage.setItem(KEYS,JSON.stringify(ST))}catch(e){}}
+  save();
+  var DAYS=[0,2,5,10,21,45];
+  document.title=(D.name||'Your')+' · English practice';
+  app.innerHTML='';
+  app.appendChild(el('h1',null,'Your practice, '+String(D.name||'').split(' ')[0]));
+  app.appendChild(el('p','muted','From '+D.tutor+'. Updated '+fmt(D.made)+(D.ses?'. Last class: '+fmt(D.ses.date)+', '+D.ses.topic:'')+'.'));
+  var tiles=el('div','tiles');
+  [[D.stats.classes,'Classes'],[D.stats.cleared,'Mistakes cleared'],['0','Cards mastered']].forEach(function(t,i){var d=el('div','tile'),b=el('b',null,String(t[0]));if(i===2)b.id='mast';d.appendChild(b);d.appendChild(el('span','muted',t[1]));tiles.appendChild(d)});
+  app.appendChild(tiles);
+  if(D.ses&&D.ses.oneLine)app.appendChild(el('p',null,D.ses.oneLine));
+
+  app.appendChild(el('h2',null,'Homework'));
+  var hw=el('div');app.appendChild(hw);
+  if(!D.homework.length)hw.appendChild(el('p','muted','No homework set.'));
+  D.homework.forEach(function(t,i){var l=el('label','hw'),c=el('input');c.type='checkbox';c.checked=!!ST.hw[i];c.onchange=function(){ST.hw[i]=c.checked;save()};l.appendChild(c);l.appendChild(el('span',null,t));hw.appendChild(l)});
+
+  app.appendChild(el('h2',null,'Drills'));
+  app.appendChild(el('p','muted','Each card is a sentence from your own classes. Say the answer out loud, then check it. Cards you get right come back later. Cards you miss come back tomorrow.'));
+  var dh=el('div');app.appendChild(dh);
+  var Q=null,I=0,shown=false;
+  function due(){var t=td();return D.cards.filter(function(c){var x=ST.cards[c.k];return !x||!x.due||x.due<=t})}
+  function stats(){document.getElementById('mast').textContent=D.cards.filter(function(c){var x=ST.cards[c.k];return x&&x.box>=3}).length}
+  function drill(){
+    dh.innerHTML='';
+    if(!D.cards.length){dh.appendChild(el('p','muted','No cards yet.'));return}
+    if(!Q){var n=due().length;dh.appendChild(el('p',null,n?n+' cards are due today. A session takes up to 12 cards.':'Nothing is due today. Well done. You can still practise.'));var b=el('button',null,n?'Start':'Practise any 12');b.onclick=function(){Q=(n?due():D.cards.slice().sort(function(){return Math.random()-0.5})).slice(0,12);I=0;shown=false;drill()};dh.appendChild(b);return}
+    if(I>=Q.length){dh.appendChild(el('p',null,'Session done. Great work. Send your results below when you finish.'));var f=el('button',null,'Finish');f.onclick=function(){Q=null;drill();stats()};dh.appendChild(f);return}
+    var c=Q[I],box=el('div','card');box.appendChild(el('div','muted',c.type+' · '+(I+1)+' of '+Q.length));box.appendChild(el('p','front',c.front));
+    if(!shown){var sb=el('button',null,'Show answer');sb.onclick=function(){shown=true;drill()};box.appendChild(sb)}
+    else{box.appendChild(el('p','back',c.back));if(c.note)box.appendChild(el('p','muted',c.note));
+      [['Got it',1],['Missed',0]].forEach(function(a){var b=el('button',a[1]?null:'ghost',a[0]);b.onclick=function(){var x=ST.cards[c.k]||{box:0,right:0,wrong:0};if(a[1]){x.box=Math.min((x.box||0)+1,5);x.right=(x.right||0)+1;x.due=add(DAYS[x.box])}else{x.box=0;x.wrong=(x.wrong||0)+1;x.due=add(1)}x.last=Date.now();ST.cards[c.k]=x;save();I++;shown=false;drill();stats()};box.appendChild(b)})}
+    dh.appendChild(box);
+  }
+  drill();stats();
+
+  if(D.practice&&D.practice.length){app.appendChild(el('h2',null,'Practice sentences'));D.practice.forEach(function(p){var c=el('div','card');c.appendChild(el('b',null,p.rule));var ol=el('ol');p.items.forEach(function(x){ol.appendChild(el('li',null,x))});c.appendChild(ol);app.appendChild(c)})}
+  if(D.phrases&&D.phrases.length){app.appendChild(el('h2',null,'Power phrases'));var ul=el('ul');D.phrases.forEach(function(x){ul.appendChild(el('li',null,x))});app.appendChild(ul)}
+  if(D.next&&(D.next.topic||D.next.date)){app.appendChild(el('h2',null,'Next class'));var nc=el('div','card');
+    [['Date',fmt(D.next.date)],['Topic',D.next.topic],['Come ready with',D.next.ready]].forEach(function(r){if(!r[1])return;var p=el('p');p.appendChild(el('b',null,r[0]+': '));p.appendChild(document.createTextNode(r[1]));nc.appendChild(p)});app.appendChild(nc)}
+
+  app.appendChild(el('h2',null,'Send your results'));
+  var rc=el('div','card');rc.id='res';
+  rc.appendChild(el('p',null,'When you finish, send your results to '+D.tutor+'. Your tutor sees which cards you know and which homework you did.'));
+  var send=el('button',null,'Copy my results'),cm=el('p','muted'),ta=el('textarea');ta.rows=3;ta.readOnly=true;ta.hidden=true;ta.setAttribute('aria-label','Results code');
+  send.onclick=function(){
+    var cs={};Object.keys(ST.cards).forEach(function(k){var x=ST.cards[k];if((x.last||0)>(D.at||0))cs[k]=x});
+    var o={v:1,sid:D.sid,pack:D.pack,ses:SES,hw:D.homework.map(function(_,i){return !!ST.hw[i]}),cards:cs,at:Date.now()};
+    ta.value='TD1.'+btoa(unescape(encodeURIComponent(JSON.stringify(o))));ta.hidden=false;ta.select();
+    var tell='Copy the code below and paste it in your chat with '+D.tutor+'.';
+    try{navigator.clipboard.writeText(ta.value).then(function(){cm.textContent='Copied. Paste it in your chat with '+D.tutor+'.'},function(){cm.textContent=tell})}catch(e){cm.textContent=tell}
+  };
+  rc.appendChild(send);rc.appendChild(cm);rc.appendChild(ta);app.appendChild(rc);
+  app.appendChild(el('p','muted','Your progress saves on this device. Keep this link: it shows your newest practice after each class.'));
+}
+})();
+</script>
+</body>
+</html>
