@@ -34,6 +34,21 @@ li{margin-bottom:4px}
 .spin{display:inline-block;width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite;vertical-align:middle;margin-right:8px}
 @keyframes s{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.big{font-size:20px;font-weight:700;margin:0 0 4px}
+.ok{color:var(--ok);font-size:14px}.err{color:var(--pen);font-size:14px}
+label.fld{display:block;font-size:14px;font-weight:600;margin:10px 0 0}
+label.fld textarea,label.fld select{margin-top:6px;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);width:100%}
+.hwrow{border-bottom:1px solid var(--line);padding-bottom:8px}
+.hwrow label.hw{border-bottom:0;padding-bottom:4px}
+.hwrow textarea{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin-top:6px}
+button.link{background:none;border:0;color:var(--accent);padding:0 0 0 32px;min-height:32px;margin:0;font-size:14px;text-decoration:underline}
+[hidden]{display:none!important}
+label.hw.today span b{color:var(--accent)}label.hw.late span b{color:var(--pen)}
+details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}
+.md h3{font-size:16px;margin:14px 0 6px}.md p{margin:6px 0}.md .tw{overflow-x:auto}.md table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}.md th,.md td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}.md th{background:var(--bg)}
+textarea{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#res textarea{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
 @media print{button,#res{display:none}}
 </style>
 </head>
@@ -95,64 +110,199 @@ load().then(function(r){
   else say('This link does not open a practice page.','Ask your tutor to send the link again.');
 });
 
+function b64u(u){var s='';for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+async function encrypt(obj){
+  var raw=new TextEncoder().encode(JSON.stringify(obj)),z='0';
+  if(window.CompressionStream){try{raw=new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());z='1'}catch(e){}}
+  var k=await crypto.subtle.importKey('raw',b64uDec(KEY),'AES-GCM',false,['encrypt']);
+  var iv=crypto.getRandomValues(new Uint8Array(12)),ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},k,raw));
+  var all=new Uint8Array(12+ct.length);all.set(iv);all.set(ct,12);
+  return 'TDI1.'+ROW+'.'+z+'.'+b64u(all);
+}
+function inl(parent,text){
+  var re=/\*\*(.+?)\*\*/g,last=0,m;text=String(text||'');
+  while((m=re.exec(text))){if(m.index>last)parent.appendChild(document.createTextNode(text.slice(last,m.index)));parent.appendChild(el('b',null,m[1]));last=re.lastIndex}
+  if(last<text.length)parent.appendChild(document.createTextNode(text.slice(last)));
+  return parent;
+}
+function md(text){
+  var box=el('div','md'),lines=String(text||'').replace(/\r/g,'').split('\n'),list=null,tbl=null;
+  function flush(){list=null;tbl=null}
+  lines.forEach(function(raw){
+    var t=raw.trim(),m;
+    if(!t){flush();return}
+    if((m=t.match(/^#{1,4}\s+(.*)$/))){flush();box.appendChild(inl(el('h3'),m[1].replace(/\*\*/g,'')));return}
+    if(t.charAt(0)==='|'){
+      var cells=t.replace(/^\||\|$/g,'').split('|').map(function(c){return c.trim()});
+      if(cells.every(function(c){return /^:?-{2,}:?$/.test(c)}))return;
+      if(!tbl){list=null;tbl=el('table');var w=el('div','tw');w.appendChild(tbl);box.appendChild(w);var tr=el('tr');cells.forEach(function(c){tr.appendChild(inl(el('th'),c))});tbl.appendChild(tr);return}
+      var tr2=el('tr');cells.forEach(function(c){tr2.appendChild(inl(el('td'),c))});tbl.appendChild(tr2);return;
+    }
+    if((m=t.match(/^(?:[-*]|\d+[.)])\s+(.*)$/))){tbl=null;if(!list){list=el(/^\d/.test(t)?'ol':'ul');box.appendChild(list)}list.appendChild(inl(el('li'),m[1]));return}
+    flush();box.appendChild(inl(el('p'),t));
+  });
+  return box;
+}
 function render(D){
-  var KEYS='tdroom-'+D.sid,ST={hw:{},cards:{}};
+  var KEYS='tdroom-'+D.sid,ST={hw:{},cards:{},ans:{},sent:{}};
   try{var s=JSON.parse(localStorage.getItem(KEYS)||'null');if(s&&s.cards)ST=s}catch(e){}
-  var SES=D.ses?D.ses.id:'';if(ST.hwFor!==SES){ST.hw={};ST.hwFor=SES}
+  ST.ans=ST.ans||{};ST.sent=ST.sent||{};ST.cd=ST.cd||{};
+  var SES=D.ses?D.ses.id:'';if(ST.hwFor!==SES){ST.hw={};ST.ans={};ST.hwFor=SES}
   (D.cards||[]).forEach(function(c){var x=ST.cards[c.k];if(!x||(c.last||0)>(x.last||0))ST.cards[c.k]={box:c.box,due:c.due,right:c.right,wrong:c.wrong,last:c.last}});
   function save(){try{localStorage.setItem(KEYS,JSON.stringify(ST))}catch(e){}}
   save();
+  var IN=D.inbox&&D.inbox.f&&D.inbox.e?D.inbox:null,TUT=D.tutor||'your tutor',FIRST=String(D.name||'').split(' ')[0];
+  async function send(o,btn,msg){
+    if(!IN)return false;
+    btn.disabled=true;msg.className='muted';msg.textContent='Sending…';
+    try{
+      o.sid=D.sid;o.pack=D.pack;o.at=Date.now();
+      var p=await encrypt(o),body=new URLSearchParams();body.append('entry.'+IN.e,p);
+      await fetch('https://docs.google.com/forms/d/e/'+IN.f+'/formResponse',{method:'POST',mode:'no-cors',body:body});
+      msg.className='ok';msg.textContent='Sent to '+TUT+'.';return true;
+    }catch(e){msg.className='err';msg.textContent='This did not send. Check your internet connection and try again.';return false}
+    finally{btn.disabled=false}
+  }
   var DAYS=[0,2,5,10,21,45];
   document.title=(D.name||'Your')+' · English practice';
   app.innerHTML='';
-  app.appendChild(el('h1',null,'Your practice, '+String(D.name||'').split(' ')[0]));
-  app.appendChild(el('p','muted','From '+D.tutor+'. Updated '+fmt(D.made)+(D.ses?'. Last class: '+fmt(D.ses.date)+', '+D.ses.topic:'')+'.'));
+  app.appendChild(el('h1',null,'Your practice, '+FIRST));
+  app.appendChild(el('p','muted','From '+TUT+'. Updated '+fmt(D.made)+(D.ses?'. Last class: '+fmt(D.ses.date)+', '+D.ses.topic:'')+'.'));
   var tiles=el('div','tiles');
-  [[D.stats.classes,'Classes'],[D.stats.cleared,'Mistakes cleared'],['0','Cards mastered']].forEach(function(t,i){var d=el('div','tile'),b=el('b',null,String(t[0]));if(i===2)b.id='mast';d.appendChild(b);d.appendChild(el('span','muted',t[1]));tiles.appendChild(d)});
+  var tl=[[D.stats.classes,'Classes'],[D.stats.cleared,'Mistakes cleared'],['0','Cards mastered']];if(D.level)tl.push([D.level,'Your level (CEFR)']);
+  tl.forEach(function(t,i){var d=el('div','tile'),b=el('b',null,String(t[0]));if(i===2)b.id='mast';d.appendChild(b);d.appendChild(el('span','muted',t[1]));tiles.appendChild(d)});
   app.appendChild(tiles);
   if(D.ses&&D.ses.oneLine)app.appendChild(el('p',null,D.ses.oneLine));
 
+  /* interview countdown */
+  if(D.cd&&D.cd.date){
+    var days=Math.round((new Date(D.cd.date+'T00:00:00')-new Date(td()+'T00:00:00'))/864e5);
+    app.appendChild(el('h2',null,'Interview countdown'));
+    var cc=el('div','card cd');
+    cc.appendChild(el('p','big',days>1?days+' days to your interview':days===1?'Your interview is tomorrow':days===0?'Your interview is today. You are ready.':'Interview done. How did it go? Tell '+TUT+'.'));
+    cc.appendChild(el('p','muted',[D.cd.company,D.cd.role,fmt(D.cd.date)].filter(Boolean).join(' · ')));
+    var mine=(D.cd.tasks||[]).filter(function(t){return t.who!=='tutor'});
+    var tdy=td(),open=mine.filter(function(t){return !(t.done||ST.cd[t.id])}),firstOpen=open.length?mine.indexOf(open[0]):0;
+    if(mine.length){var ul=el('div');mine.forEach(function(t,ix){var key=t.id,l=el('label','hw'+(t.day<td()&&!t.done&&!ST.cd[key]?' late':'')+(t.day===td()?' today':'')),c=el('input');c.type='checkbox';c.checked=!!(t.done||ST.cd[key]);c.onchange=function(){ST.cd[key]=c.checked;save()};l.appendChild(c);var sp=el('span');sp.appendChild(el('b',null,(t.day===td()?'Today':fmt(t.day))+': '));sp.appendChild(document.createTextNode(t.title));l.appendChild(sp);if(ix<firstOpen||ix>firstOpen+3)l.hidden=true;ul.appendChild(l)});cc.appendChild(ul);
+      if(mine.length>4){var tg=el('button','ghost','See the full plan ('+mine.length+' steps)');tg.onclick=function(){Array.prototype.forEach.call(ul.children,function(x){x.hidden=false});tg.remove()};cc.appendChild(tg)}}
+    app.appendChild(cc);
+  }
+
+  /* check-in */
+  if(IN){
+    var nx=D.next&&D.next.date?D.next.date:'',ck=nx||'next';
+    app.appendChild(el('h2',null,'Before our next class'));
+    var ci=el('div','card');
+    if(ST.sent['ci'+ck]){ci.appendChild(el('p','ok','Thank you. '+TUT+' will plan your next class around your answers.'));var again=el('button','ghost','Send a new check-in');again.onclick=function(){delete ST.sent['ci'+ck];save();render(D)};ci.appendChild(again)}
+    else{
+      ci.appendChild(el('p',null,'Three quick questions. '+TUT+' plans your next class'+(nx?' ('+fmt(nx)+')':'')+' around your answers.'));
+      var qs=[['week','What is happening at work this week?'],['upcoming','Do you have a meeting, presentation, call or interview coming up? When?'],['fix','What do you want to work on in the next class?']],inputs={};
+      qs.forEach(function(q){var lb=el('label','fld',q[1]),ta=el('textarea');ta.rows=2;inputs[q[0]]=ta;lb.appendChild(ta);ci.appendChild(lb)});
+      var conf=el('select');['','1: Not confident','2','3: OK','4','5: Very confident'].forEach(function(v,i){var o=el('option',null,v||'Choose');o.value=i?String(i):'';conf.appendChild(o)});
+      var lc=el('label','fld','How confident do you feel speaking English this week?');lc.appendChild(conf);ci.appendChild(lc);
+      var sb=el('button',null,'Send to '+TUT),sm=el('p','muted');
+      sb.onclick=async function(){
+        var o={t:'checkin',next:nx,week:inputs.week.value.trim(),upcoming:inputs.upcoming.value.trim(),fix:inputs.fix.value.trim(),conf:Number(conf.value)||null};
+        if(!o.week&&!o.upcoming&&!o.fix){sm.className='err';sm.textContent='Answer at least one question.';return}
+        if(await send(o,sb,sm)){ST.sent['ci'+ck]=Date.now();save();setTimeout(function(){render(D)},900)}
+      };
+      ci.appendChild(sb);ci.appendChild(sm);
+    }
+    app.appendChild(ci);
+  }
+
+  /* feedback */
+  if(D.feedback&&D.feedback.length){
+    app.appendChild(el('h2',null,'Feedback from '+TUT));
+    D.feedback.forEach(function(f){var c=el('details','card fb');var sm2=el('summary');sm2.appendChild(el('b',null,f.title));sm2.appendChild(el('span','muted',' · '+fmt(f.date)));c.appendChild(sm2);c.appendChild(md(f.md));app.appendChild(c)});
+    app.querySelector('details.fb').open=true;
+  }
+
+  /* homework */
   app.appendChild(el('h2',null,'Homework'));
   var hw=el('div');app.appendChild(hw);
   if(!D.homework.length)hw.appendChild(el('p','muted','No homework set.'));
-  D.homework.forEach(function(t,i){var l=el('label','hw'),c=el('input');c.type='checkbox';c.checked=!!ST.hw[i];c.onchange=function(){ST.hw[i]=c.checked;save()};l.appendChild(c);l.appendChild(el('span',null,t));hw.appendChild(l)});
+  D.homework.forEach(function(t,i){
+    var row=el('div','hwrow'),l=el('label','hw'),c=el('input');c.type='checkbox';c.checked=!!ST.hw[i];c.onchange=function(){ST.hw[i]=c.checked;save()};l.appendChild(c);l.appendChild(el('span',null,t));row.appendChild(l);
+    if(IN){
+      var tg=el('button','link',ST.ans[i]?'Edit your answer':'Write your answer'),ta=el('textarea');ta.rows=4;ta.value=ST.ans[i]||'';ta.hidden=!ST.ans[i];ta.placeholder='Write here. '+TUT+' will correct it.';ta.setAttribute('aria-label','Your answer for task '+(i+1));
+      tg.onclick=function(){ta.hidden=!ta.hidden;if(!ta.hidden)ta.focus()};ta.oninput=function(){ST.ans[i]=ta.value;save()};
+      row.appendChild(tg);row.appendChild(ta);
+    }
+    hw.appendChild(row);
+  });
+  if(IN&&D.homework.length){
+    var hb=el('button',null,'Send homework to '+TUT),hm=el('p','muted');
+    if(ST.sent['hw'+SES])hm.textContent='Last sent '+new Date(ST.sent['hw'+SES]).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+'. You can send again after more work.';
+    hb.onclick=async function(){
+      var answers=D.homework.map(function(t,i){return {i:i,task:t,text:String(ST.ans[i]||'').trim()}}).filter(function(a){return a.text});
+      var done=D.homework.map(function(_,i){return !!ST.hw[i]});
+      if(!answers.length&&!done.some(Boolean)){hm.className='err';hm.textContent='Tick a task or write an answer first.';return}
+      if(await send({t:'hw',ses:SES,done:done,answers:answers},hb,hm)){ST.sent['hw'+SES]=Date.now();save()}
+    };
+    hw.appendChild(hb);hw.appendChild(hm);
+  }
 
+  /* interview practice */
+  if(IN&&D.ivq&&D.ivq.length){
+    app.appendChild(el('h2',null,'Interview practice'));
+    app.appendChild(el('p','muted','Answer out loud first. Then write your answer and send it. Aim for 130 to 220 words: point, example, result.'));
+    D.ivq.forEach(function(q,i){
+      var c=el('div','card'),k='iv'+i+':'+q;c.appendChild(el('p','front',q));
+      var ta=el('textarea');ta.rows=5;ta.value=ST.ans[k]||'';ta.setAttribute('aria-label','Your answer');ta.oninput=function(){ST.ans[k]=ta.value;save();wc.textContent=(ta.value.match(/\S+/g)||[]).length+' words'};
+      var wc=el('span','muted',(ta.value.match(/\S+/g)||[]).length+' words'),b=el('button',null,'Send answer'),m=el('p','muted');
+      if(ST.sent[k])m.textContent='Sent. '+TUT+' will score it.';
+      b.onclick=async function(){var t=ta.value.trim();if((t.match(/\S+/g)||[]).length<20){m.className='err';m.textContent='Write at least a few sentences first.';return}if(await send({t:'answer',q:q,text:t,cd:D.cd&&D.cd.id||''},b,m)){ST.sent[k]=Date.now();save()}};
+      c.appendChild(ta);c.appendChild(wc);var a=el('div');a.appendChild(b);c.appendChild(a);c.appendChild(m);app.appendChild(c);
+    });
+  }
+
+  /* drills */
   app.appendChild(el('h2',null,'Drills'));
   app.appendChild(el('p','muted','Each card is a sentence from your own classes. Say the answer out loud, then check it. Cards you get right come back later. Cards you miss come back tomorrow.'));
   var dh=el('div');app.appendChild(dh);
-  var Q=null,I=0,shown=false;
+  var Q=null,I=0,shown=false,sess={right:0,wrong:0};
   function due(){var t=td();return D.cards.filter(function(c){var x=ST.cards[c.k];return !x||!x.due||x.due<=t})}
   function stats(){document.getElementById('mast').textContent=D.cards.filter(function(c){var x=ST.cards[c.k];return x&&x.box>=3}).length}
   function drill(){
     dh.innerHTML='';
     if(!D.cards.length){dh.appendChild(el('p','muted','No cards yet.'));return}
-    if(!Q){var n=due().length;dh.appendChild(el('p',null,n?n+' cards are due today. A session takes up to 12 cards.':'Nothing is due today. Well done. You can still practise.'));var b=el('button',null,n?'Start':'Practise any 12');b.onclick=function(){Q=(n?due():D.cards.slice().sort(function(){return Math.random()-0.5})).slice(0,12);I=0;shown=false;drill()};dh.appendChild(b);return}
-    if(I>=Q.length){dh.appendChild(el('p',null,'Session done. Great work. Send your results below when you finish.'));var f=el('button',null,'Finish');f.onclick=function(){Q=null;drill();stats()};dh.appendChild(f);return}
+    if(!Q){var n=due().length;dh.appendChild(el('p',null,n?n+' cards are due today. A session takes up to 12 cards.':'Nothing is due today. Well done. You can still practise.'));var b=el('button',null,n?'Start':'Practise any 12');b.onclick=function(){Q=(n?due():D.cards.slice().sort(function(){return Math.random()-0.5})).slice(0,12);I=0;shown=false;sess={right:0,wrong:0};drill()};dh.appendChild(b);return}
+    if(I>=Q.length){
+      dh.appendChild(el('p',null,'Session done: '+sess.right+' right, '+sess.wrong+' to review. Great work.'));
+      var f=el('button',IN?'ghost':null,'Finish');f.onclick=function(){Q=null;drill();stats()};
+      if(IN){var sr=el('button',null,'Send results to '+TUT),sm=el('p','muted');sr.onclick=async function(){var cs={};Object.keys(ST.cards).forEach(function(k){var x=ST.cards[k];if((x.last||0)>(D.at||0))cs[k]=x});if(await send({t:'drill',ses:SES,cards:cs,right:sess.right,wrong:sess.wrong},sr,sm)){Q=null;setTimeout(function(){drill();stats()},900)}};dh.appendChild(sr);dh.appendChild(f);dh.appendChild(sm)}
+      else dh.appendChild(f);
+      return;
+    }
     var c=Q[I],box=el('div','card');box.appendChild(el('div','muted',c.type+' · '+(I+1)+' of '+Q.length));box.appendChild(el('p','front',c.front));
     if(!shown){var sb=el('button',null,'Show answer');sb.onclick=function(){shown=true;drill()};box.appendChild(sb)}
     else{box.appendChild(el('p','back',c.back));if(c.note)box.appendChild(el('p','muted',c.note));
-      [['Got it',1],['Missed',0]].forEach(function(a){var b=el('button',a[1]?null:'ghost',a[0]);b.onclick=function(){var x=ST.cards[c.k]||{box:0,right:0,wrong:0};if(a[1]){x.box=Math.min((x.box||0)+1,5);x.right=(x.right||0)+1;x.due=add(DAYS[x.box])}else{x.box=0;x.wrong=(x.wrong||0)+1;x.due=add(1)}x.last=Date.now();ST.cards[c.k]=x;save();I++;shown=false;drill();stats()};box.appendChild(b)})}
+      [['Got it',1],['Missed',0]].forEach(function(a){var b=el('button',a[1]?null:'ghost',a[0]);b.onclick=function(){var x=ST.cards[c.k]||{box:0,right:0,wrong:0};if(a[1]){x.box=Math.min((x.box||0)+1,5);x.right=(x.right||0)+1;x.due=add(DAYS[x.box]);sess.right++}else{x.box=0;x.wrong=(x.wrong||0)+1;x.due=add(1);sess.wrong++}x.last=Date.now();ST.cards[c.k]=x;save();I++;shown=false;drill();stats()};box.appendChild(b)})}
     dh.appendChild(box);
   }
   drill();stats();
 
   if(D.practice&&D.practice.length){app.appendChild(el('h2',null,'Practice sentences'));D.practice.forEach(function(p){var c=el('div','card');c.appendChild(el('b',null,p.rule));var ol=el('ol');p.items.forEach(function(x){ol.appendChild(el('li',null,x))});c.appendChild(ol);app.appendChild(c)})}
-  if(D.phrases&&D.phrases.length){app.appendChild(el('h2',null,'Power phrases'));var ul=el('ul');D.phrases.forEach(function(x){ul.appendChild(el('li',null,x))});app.appendChild(ul)}
+  if(D.phrases&&D.phrases.length){app.appendChild(el('h2',null,'Power phrases'));var ul2=el('ul');D.phrases.forEach(function(x){ul2.appendChild(el('li',null,x))});app.appendChild(ul2)}
+  if(D.prog){app.appendChild(el('h2',null,'Your program'));var pc=el('div','card');pc.appendChild(el('p','big',D.prog.title));pc.appendChild(el('p','muted','Week '+D.prog.week+' of '+D.prog.weeks+(D.prog.target?' · Goal: '+D.prog.target:'')));if(D.prog.now){var p1=el('p');p1.appendChild(el('b',null,'This week: '));p1.appendChild(document.createTextNode(D.prog.now));pc.appendChild(p1)}if(D.prog.next){var p2=el('p','muted');p2.textContent='Next week: '+D.prog.next;pc.appendChild(p2)}app.appendChild(pc)}
   if(D.next&&(D.next.topic||D.next.date)){app.appendChild(el('h2',null,'Next class'));var nc=el('div','card');
     [['Date',fmt(D.next.date)],['Topic',D.next.topic],['Come ready with',D.next.ready]].forEach(function(r){if(!r[1])return;var p=el('p');p.appendChild(el('b',null,r[0]+': '));p.appendChild(document.createTextNode(r[1]));nc.appendChild(p)});app.appendChild(nc)}
 
-  app.appendChild(el('h2',null,'Send your results'));
-  var rc=el('div','card');rc.id='res';
-  rc.appendChild(el('p',null,'When you finish, send your results to '+D.tutor+'. Your tutor sees which cards you know and which homework you did.'));
-  var send=el('button',null,'Copy my results'),cm=el('p','muted'),ta=el('textarea');ta.rows=3;ta.readOnly=true;ta.hidden=true;ta.setAttribute('aria-label','Results code');
-  send.onclick=function(){
-    var cs={};Object.keys(ST.cards).forEach(function(k){var x=ST.cards[k];if((x.last||0)>(D.at||0))cs[k]=x});
-    var o={v:1,sid:D.sid,pack:D.pack,ses:SES,hw:D.homework.map(function(_,i){return !!ST.hw[i]}),cards:cs,at:Date.now()};
-    ta.value='TD1.'+btoa(unescape(encodeURIComponent(JSON.stringify(o))));ta.hidden=false;ta.select();
-    var tell='Copy the code below and paste it in your chat with '+D.tutor+'.';
-    try{navigator.clipboard.writeText(ta.value).then(function(){cm.textContent='Copied. Paste it in your chat with '+D.tutor+'.'},function(){cm.textContent=tell})}catch(e){cm.textContent=tell}
-  };
-  rc.appendChild(send);rc.appendChild(cm);rc.appendChild(ta);app.appendChild(rc);
+  if(!IN){
+    app.appendChild(el('h2',null,'Send your results'));
+    var rc=el('div','card');rc.id='res';
+    rc.appendChild(el('p',null,'When you finish, send your results to '+TUT+'. Your tutor sees which cards you know and which homework you did.'));
+    var sendb=el('button',null,'Copy my results'),cm=el('p','muted'),ta=el('textarea');ta.rows=3;ta.readOnly=true;ta.hidden=true;ta.setAttribute('aria-label','Results code');
+    sendb.onclick=function(){
+      var cs={};Object.keys(ST.cards).forEach(function(k){var x=ST.cards[k];if((x.last||0)>(D.at||0))cs[k]=x});
+      var o={v:1,sid:D.sid,pack:D.pack,ses:SES,hw:D.homework.map(function(_,i){return !!ST.hw[i]}),cards:cs,at:Date.now()};
+      ta.value='TD1.'+btoa(unescape(encodeURIComponent(JSON.stringify(o))));ta.hidden=false;ta.select();
+      var tell='Copy the code below and paste it in your chat with '+TUT+'.';
+      try{navigator.clipboard.writeText(ta.value).then(function(){cm.textContent='Copied. Paste it in your chat with '+TUT+'.'},function(){cm.textContent=tell})}catch(e){cm.textContent=tell}
+    };
+    rc.appendChild(sendb);rc.appendChild(cm);rc.appendChild(ta);app.appendChild(rc);
+  }
   app.appendChild(el('p','muted','Your progress saves on this device. Keep this link: it shows your newest practice after each class.'));
 }
 })();
